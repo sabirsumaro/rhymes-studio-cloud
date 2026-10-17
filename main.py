@@ -25,7 +25,7 @@ Characters: {CFG['character_bible']}
 Topic pool: {CFG['topic_seed']}
 Safety: gentle, age-appropriate, no dangerous imitation, no scary content.
 """.strip()
-    models=["gemini-2.5-flash","gemini-2.0-flash"]
+    models=["gemini-3.8-flash","gemini-3.5-flash","gemini-3.1-flash-lite"]
     last=None
     for model in models:
         try:
