@@ -24,25 +24,24 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install FFmpeg and Python
+      - uses: actions/checkout@v4
+      - name: Install FFmpeg and fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Generate video and deliver
+      - name: Generate video, Shorts and deliver
         run: python main.py
       - name: Upload artifacts for inspection
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rhymes-studio-output
+          name: rhymes-studio-v2-output
           path: output/
           if-no-files-found: ignore
           retention-days: 3
