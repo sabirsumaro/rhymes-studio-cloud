@@ -23,10 +23,11 @@ def ask_gemini():
     prompt = f"""
 Create an original preschool English musical-rhyme episode package as valid JSON only.
 Keys: title, description, lyrics, scenes.
-Return exactly 18 scenes. Each scene: visual, action, lyric, mood.
-Lyrics: target 800-900 words, short rhythmic lines, a recurring ORIGINAL chorus no more than 3 times,
-clear verse/chorus structure, actions children can understand, beginning-middle-ending story.
-Each scene lyric should be 2-4 short lines. Lyrics must be written to be sung, not as explanatory prose.
+Return exactly 18 scenes. Each scene must contain: visual, action, lyric, mood.
+The top-level lyrics MUST contain 800-900 words total, divided into short rhythmic singable lines.
+IMPORTANT: 18 scenes with only 2-4 lines each cannot reach the required length. Each scene's lyric must contain 6-8 short lines, about 6-8 words per line, and all scene lyrics together should form the full song.
+Use a recurring ORIGINAL chorus hook no more than 3 times, clear verse/chorus structure, a beginning-middle-ending story, and words that naturally fit a steady 4/4 nursery-song rhythm.
+Do not write explanatory prose or narration. Lyrics must be intended to be sung, not spoken.
 No copied nursery-rhyme lyrics, familiar melodies, famous characters, brands, or channel imitation.
 Characters: {CFG['character_bible']}
 Theme pool: {CFG['topic_seed']}
@@ -35,32 +36,65 @@ Age range: preschool. Gentle, safe, positive.
     models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
     errors = []
     for model in models:
-        try:
-            r = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                params={"key": GEMINI},
-                json={"contents":[{"parts":[{"text":prompt}]}],
-                      "generationConfig":{"responseMimeType":"application/json","temperature":0.9}},
-                timeout=120)
-            if r.status_code in (401,403):
-                raise RuntimeError(f"Gemini API key/access error ({r.status_code}); check key and API access.")
-            if r.status_code == 429:
-                errors.append(f"{model}: free quota/rate limit")
-                continue
-            if r.status_code == 404:
-                errors.append(f"{model}: model not available")
-                continue
-            r.raise_for_status()
-            raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            pkg = json.loads(raw)
-            if not isinstance(pkg.get("scenes"), list) or len(pkg["scenes"]) < 12:
-                raise RuntimeError("Generated package has fewer than 12 scenes; refusing low-content episode.")
-            if len(pkg.get("lyrics","").split()) < 650:
-                raise RuntimeError("Generated lyrics are too short for a 6–8 minute episode; refusing a short video.")
-            return pkg
-        except Exception as e:
-            errors.append(f"{model}: {e}")
-    raise RuntimeError("Gemini generation failed: " + " | ".join(errors[-3:]))
+        # Retry transient server errors twice before trying the next model.
+        for attempt in range(3):
+            try:
+                r = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    params={"key": GEMINI},
+                    json={"contents":[{"parts":[{"text":prompt}]}],
+                          "generationConfig":{"responseMimeType":"application/json","temperature":0.9,"maxOutputTokens":8192}},
+                    timeout=150)
+                if r.status_code in (401,403):
+                    raise RuntimeError(f"Gemini API key/access error ({r.status_code}); check key and API access.")
+                if r.status_code == 429:
+                    errors.append(f"{model}: free quota/rate limit (429)")
+                    break
+                if r.status_code in (500,502,503,504):
+                    errors.append(f"{model}: temporary service error ({r.status_code}), attempt {attempt+1}/3")
+                    if attempt < 2:
+                        import time
+                        time.sleep(2 ** attempt)
+                        continue
+                    break
+                if r.status_code == 404:
+                    errors.append(f"{model}: model not available (404)")
+                    break
+                r.raise_for_status()
+                body = r.json()
+                candidates = body.get("candidates", [])
+                if not candidates:
+                    errors.append(f"{model}: response contained no candidates")
+                    break
+                raw = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                pkg = json.loads(raw)
+                if not isinstance(pkg.get("scenes"), list) or len(pkg["scenes"]) < 12:
+                    errors.append(f"{model}: fewer than 12 scenes")
+                    break
+                lyric_text = str(pkg.get("lyrics", "")).strip()
+                lyric_words = len(lyric_text.split())
+                if lyric_words < 650:
+                    # Scene lyrics may be complete even when the top-level field is short.
+                    scene_lyrics = "\n".join(str(sc.get("lyric", "")) for sc in pkg["scenes"])
+                    scene_words = len(scene_lyrics.split())
+                    if scene_words >= 650:
+                        pkg["lyrics"] = scene_lyrics
+                        lyric_words = scene_words
+                if lyric_words < 650:
+                    errors.append(f"{model}: generated only {lyric_words} lyric words (minimum 650); retrying another model")
+                    break
+                return pkg
+            except (requests.Timeout, requests.ConnectionError) as e:
+                errors.append(f"{model}: temporary network error, attempt {attempt+1}/3")
+                if attempt < 2:
+                    import time
+                    time.sleep(2 ** attempt)
+                    continue
+                break
+            except Exception as e:
+                errors.append(f"{model}: {e}")
+                break
+    raise RuntimeError("Gemini generation failed: " + " | ".join(errors[-6:]))
 
 def font(size, bold=False):
     candidates = [
