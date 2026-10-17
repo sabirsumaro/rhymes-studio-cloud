@@ -1,0 +1,48 @@
+name: Daily Rhymes Studio
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Test generation without Telegram delivery'
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: '30 2 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: rhymes-studio-daily
+  cancel-in-progress: false
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install FFmpeg and Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Generate video and deliver
+        run: python main.py
+      - name: Upload artifacts for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhymes-studio-output
+          path: output/
+          if-no-files-found: ignore
+          retention-days: 3

@@ -1,0 +1,20 @@
+{
+  "channel_name": "Rhymes Studio",
+  "language": "English",
+  "target_duration_minutes": 6.5,
+  "resolution": [
+    1280,
+    720
+  ],
+  "fps": 24,
+  "age_range": "preschool",
+  "originality_rules": [
+    "Write entirely new lyrics; never reproduce known nursery-rhyme lyrics or melodies.",
+    "Do not imitate named channels, copyrighted characters, or a specific creator's style.",
+    "Use a different story premise and chorus hook from recent generated videos.",
+    "Use simple, age-appropriate English and a clear beginning, middle, and ending."
+  ],
+  "character_bible": "Original friendly characters only: Pip the teal baby dragon with tiny yellow wings; Dot the orange round bird with a small blue scarf. Keep these designs consistent.",
+  "topic_seed": "play, friendship, counting, colours, animals, gentle problem-solving",
+  "music_note": "No music track is bundled. Add only music you have verified is licensed for your intended use to assets/music/background.mp3."
+}
